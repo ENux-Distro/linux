@@ -1609,7 +1609,6 @@ static int __ref kernel_init(void *unused)
          !try_to_run_init_process("/usr/bin/init") ||
          !try_to_run_init_process("/usr/sbin/init") ||
 	 // Start searching sh
-         !try_to_run_init_process("/bin/sh") ||
 	 !try_to_run_init_process("/sh") ||
          !try_to_run_init_process("/sbin/sh") ||
 	 !try_to_run_init_process("/etc/sh") ||
