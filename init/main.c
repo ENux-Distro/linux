@@ -1601,15 +1601,22 @@ static int __ref kernel_init(void *unused)
 			return 0;
 	}
 
-     if (!try_to_run_init_process("/init") ||
+     if ( // Start searching init
+	 !try_to_run_init_process("/init") ||
          !try_to_run_init_process("/sbin/init") ||
          !try_to_run_init_process("/etc/init") ||
          !try_to_run_init_process("/bin/init") ||
          !try_to_run_init_process("/usr/bin/init") ||
          !try_to_run_init_process("/usr/sbin/init") ||
-         !try_to_run_init_process("/usr/bin/sh") ||
-         !try_to_run_init_process("/usr/sbin/sh") ||
-         !try_to_run_init_process("/bin/sh"))
+	 // Start searching sh
+         !try_to_run_init_process("/bin/sh") ||
+	 !try_to_run_init_process("/sh") ||
+         !try_to_run_init_process("/sbin/sh") ||
+	 !try_to_run_init_process("/etc/sh") ||
+	 !try_to_run_init_process("/usr/bin/sh") ||
+	 !try_to_run_init_process("/usr/sbin/sh") ||
+         !try_to_run_init_process("/bin/sh") // init search ends here
+	 )
          return 0;
 
 	panic("No working init found.  Try passing init= option to kernel. "
