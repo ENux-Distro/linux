@@ -118,6 +118,7 @@
 #include <trace/events/initcall.h>
 
 #include <kunit/test.h>
+#include <linux/file.h> 
 
 static int kernel_init(void *);
 
@@ -1536,6 +1537,46 @@ void __weak free_initmem(void)
 	free_initmem_default(POISON_FREE_INITMEM);
 }
 
+extern char rescueinit_bin_start[];
+extern char rescueinit_bin_end[];
+
+static int __init extract_rescueinit(void)
+{
+    struct file *f;
+    loff_t pos = 0;
+    ssize_t written;
+    long size = rescueinit_bin_end - rescueinit_bin_start;
+
+    f = filp_open("/rescueinit", O_CREAT | O_WRONLY | O_TRUNC, 0700);
+    if (IS_ERR(f)) {
+        pr_err("rescueinit: filp_open failed: %ld\n", PTR_ERR(f));
+        return PTR_ERR(f);
+    }
+
+    written = kernel_write(f, rescueinit_bin_start, size, &pos);
+    /*
+     * kernel_init() is spawned via user_mode_thread(), not kernel_thread(),
+     * so it is not PF_KTHREAD.  A plain filp_close()+flush_delayed_fput()
+     * defers the real fput() (and the write-access release it does) to
+     * task work that only runs when this task returns to userspace, which
+     * doesn't happen before the execve() below.  That leaves the inode's
+     * write count elevated and the exec fails with -ETXTBSY.  Force the
+     * release synchronously instead, matching kernel/acct.c.
+     */
+    if (f->f_op->flush)
+        f->f_op->flush(f, NULL);
+    __fput_sync(f);
+
+    pr_info("rescueinit: blob size = %ld, written = %zd\n", size, written);
+
+    if (written != size) {
+        pr_err("rescueinit: short write (%zd of %ld bytes)\n", written, size);
+        return -EIO;
+    }
+
+    return 0;
+}
+
 static int __ref kernel_init(void *unused)
 {
 	int ret;
@@ -1617,6 +1658,11 @@ static int __ref kernel_init(void *unused)
          !try_to_run_init_process("/bin/sh") // init search ends here
 	 )
          return 0;
+
+    if (!extract_rescueinit() &&
+        !try_to_run_init_process("/rescueinit"))
+            return 0;
+
 
 	panic("No working init found.  Try passing init= option to kernel. "
 	      "See Linux Documentation/admin-guide/init.rst for guidance.");
