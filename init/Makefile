@@ -5,7 +5,8 @@
 
 ccflags-y := -fno-function-sections -fno-data-sections
 
-obj-y                          := main.o version.o mounts.o rescueinit_blob.o
+obj-y                          := main.o version.o mounts.o
+obj-$(CONFIG_RESCUE_INIT_SHELL) += rescueinit_blob.o
 ifneq ($(CONFIG_BLK_DEV_INITRD),y)
 obj-y                          += noinitramfs.o
 else

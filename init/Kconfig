@@ -455,6 +455,19 @@ config DEFAULT_INIT
 	  locations (e.g. /sbin/init, etc). If this is empty, we will just use
 	  the fallback list when init= is not passed.
 
+config RESCUE_INIT_SHELL
+	bool "Rescue Init Shell"
+	default n
+	help
+	  Embed a small, statically-linked, freestanding rescue shell into the
+	  kernel image. If none of the usual init candidates (/init, /sbin/init,
+	  /bin/sh, ...) can be executed, the kernel extracts this binary to
+	  /rescueinit on the root filesystem and runs it instead of panicking,
+	  giving you an interactive prompt that can only run syscalls
+
+	  This increases the kernel image size by the size of the embedded
+	  binary. If unsure, say N.
+
 config DEFAULT_HOSTNAME
 	string "Default hostname"
 	default "(none)"

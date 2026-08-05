@@ -1537,6 +1537,7 @@ void __weak free_initmem(void)
 	free_initmem_default(POISON_FREE_INITMEM);
 }
 
+#ifdef CONFIG_RESCUE_INIT_SHELL
 extern char rescueinit_bin_start[];
 extern char rescueinit_bin_end[];
 
@@ -1576,6 +1577,9 @@ static int __init extract_rescueinit(void)
 
     return 0;
 }
+#else
+static inline int extract_rescueinit(void) { return -ENOENT; }
+#endif /* CONFIG_RESCUE_INIT_SHELL */
 
 static int __ref kernel_init(void *unused)
 {
