@@ -5,10 +5,10 @@
  * this blob. Keep it in ordinary .rodata so it survives until then.
  */
 .section .rodata, "a"
-    .global rescueinit_bin_start
-    .global rescueinit_bin_end
+    .global smol_bin_start
+    .global smol_bin_end
 
     .align 8
-rescueinit_bin_start:
-    .incbin "init/rescueinit_bin"
-rescueinit_bin_end:
+smol_bin_start:
+    .incbin "init/smol_bin"
+smol_bin_end:

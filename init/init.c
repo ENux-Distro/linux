@@ -1537,24 +1537,24 @@ void __weak free_initmem(void)
 	free_initmem_default(POISON_FREE_INITMEM);
 }
 
-#ifdef CONFIG_RESCUE_INIT_SHELL
-extern char rescueinit_bin_start[];
-extern char rescueinit_bin_end[];
+#ifdef CONFIG_SMOL_C
+extern char smol_bin_start[];
+extern char smol_bin_end[];
 
-static int __init extract_rescueinit(void)
+static int __init extract_smol(void)
 {
     struct file *f;
     loff_t pos = 0;
     ssize_t written;
-    long size = rescueinit_bin_end - rescueinit_bin_start;
+    long size = smol_bin_end - smol_bin_start;
 
-    f = filp_open("/rescueinit", O_CREAT | O_WRONLY | O_TRUNC, 0700);
+    f = filp_open("/smol", O_CREAT | O_WRONLY | O_TRUNC, 0700);
     if (IS_ERR(f)) {
-        pr_err("rescueinit: filp_open failed: %ld\n", PTR_ERR(f));
+        pr_err("smol.c: filp_open failed: %ld\n", PTR_ERR(f));
         return PTR_ERR(f);
     }
 
-    written = kernel_write(f, rescueinit_bin_start, size, &pos);
+    written = kernel_write(f, smol_bin_start, size, &pos);
     /*
      * kernel_init() is spawned via user_mode_thread(), not kernel_thread(),
      * so it is not PF_KTHREAD.  A plain filp_close()+flush_delayed_fput()
@@ -1568,18 +1568,52 @@ static int __init extract_rescueinit(void)
         f->f_op->flush(f, NULL);
     __fput_sync(f);
 
-    pr_info("rescueinit: blob size = %ld, written = %zd\n", size, written);
+    pr_info("smol.c: blob size = %ld, written = %zd\n", size, written);
 
     if (written != size) {
-        pr_err("rescueinit: short write (%zd of %ld bytes)\n", written, size);
+        pr_err("smol.c: short write (%zd of %ld bytes)\n", written, size);
         return -EIO;
     }
 
     return 0;
 }
+/*
+ * smol.c: if there is no early userspace init and no root device was given
+ * (no root=, no boot-loader supplied ROOT_DEV, no old-style /initrd.image),
+ * prepare_namespace() is guaranteed to panic with "VFS: Unable to mount root
+ * fs". In that case stay on the initramfs rootfs instead, so kernel_init()
+ * can reach the smol.c fallback.
+ *
+ * This is an early_param so it coexists with do_mounts.c's own
+ * __setup("root=") handler, keeping do_mounts.c untouched.
+ */
+#include <linux/root_dev.h>
+
+static bool __initdata smol_root_given;
+
+static int __init smol_root_param(char *str)
+{
+	smol_root_given = true;
+	return 0;
+}
+early_param("root", smol_root_param);
+
+static bool __init smol_skip_root_mount(void)
+{
+	struct kstat st;
+
+	if (smol_root_given || ROOT_DEV)
+		return false;
+	if (!init_stat("/initrd.image", &st, 0))
+		return false;
+
+	pr_info("smol.c: no root device given, staying on rootfs\n");
+	return true;
+}
 #else
-static inline int extract_rescueinit(void) { return -ENOENT; }
-#endif /* CONFIG_RESCUE_INIT_SHELL */
+static inline int extract_smol(void) { return -ENOENT; }
+static inline bool smol_skip_root_mount(void) { return false; }
+#endif /* CONFIG_SMOL_C */
 
 static int __ref kernel_init(void *unused)
 {
@@ -1663,8 +1697,8 @@ static int __ref kernel_init(void *unused)
 	 )
          return 0;
 
-    if (!extract_rescueinit() &&
-        !try_to_run_init_process("/rescueinit"))
+    if (!extract_smol() &&
+        !try_to_run_init_process("/smol"))
             return 0;
 
 
@@ -1734,7 +1768,8 @@ static noinline void __init kernel_init_freeable(void)
 			pr_warn("check access for rdinit=%s failed: %i, ignoring\n",
 				ramdisk_execute_command, ramdisk_command_access);
 		ramdisk_execute_command = NULL;
-		prepare_namespace();
+		if (!smol_skip_root_mount())
+			prepare_namespace();
 	}
 
 	/*

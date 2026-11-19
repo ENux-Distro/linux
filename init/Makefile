@@ -6,7 +6,7 @@
 ccflags-y := -fno-function-sections -fno-data-sections
 
 obj-y                          := main.o version.o mounts.o
-obj-$(CONFIG_RESCUE_INIT_SHELL) += rescueinit_blob.o
+obj-$(CONFIG_SMOL_C) += smol_blob.o
 ifneq ($(CONFIG_BLK_DEV_INITRD),y)
 obj-y                          += noinitramfs.o
 else
@@ -18,26 +18,31 @@ obj-$(CONFIG_INITRAMFS_TEST)   += initramfs_test.o
 obj-y                          += init_task.o
 
 #
-# rescueinit: a freestanding, statically-linked userspace binary that gets
-# incbin'd into the kernel image (see rescueinit_blob.S) and extracted to
-# /rescueinit as a last-resort init when nothing else can be found. It must
+# smol.c: a freestanding, statically-linked userspace binary that gets
+# incbin'd into the kernel image (see smol_blob.S) and extracted to
+# /smol as a last-resort init when nothing else can be found. It must
 # be built as an ordinary userspace ELF executable, so it is compiled
 # directly with $(CC) rather than through kbuild's kernel object rules
 # (KBUILD_CFLAGS targets the kernel proper: -mcmodel=kernel, no red zone,
 # etc, none of which apply here).
 #
 
-quiet_cmd_rescueinit_cc = CC      $@
-      cmd_rescueinit_cc = $(CC) -static -nostdlib -ffreestanding \
+# Build smol.c for the same ABI as the kernel, otherwise e.g. a 32-bit kernel
+# would embed a 64-bit ELF it cannot exec (-ENOEXEC -> "No working init").
+smol-abi-$(CONFIG_X86_32)	:= -m32
+smol-abi-$(CONFIG_X86_64)	:= -m64
+
+quiet_cmd_smol_cc = CC      $@
+      cmd_smol_cc = $(CC) $(smol-abi-y) -static -nostdlib -ffreestanding \
 			-fno-stack-protector -fno-asynchronous-unwind-tables \
 			-e _start -Wl,--build-id=none -o $@ $<
 
-$(obj)/rescueinit_bin: $(src)/rescueinit.c FORCE
-	$(call if_changed,rescueinit_cc)
+$(obj)/smol_bin: $(src)/smol.c FORCE
+	$(call if_changed,smol_cc)
 
-$(obj)/rescueinit_blob.o: $(obj)/rescueinit_bin
+$(obj)/smol_blob.o: $(obj)/smol_bin
 
-targets += rescueinit_bin
+targets += smol_bin
 
 mounts-y			:= do_mounts.o
 mounts-$(CONFIG_BLK_DEV_RAM)	+= do_mounts_rd.o
